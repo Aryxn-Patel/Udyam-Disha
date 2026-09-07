@@ -82,6 +82,7 @@ export interface MarketMetrics {
   economy_type_ratio: number;
   live_competitor_count: number | null;
   competitor_breakdown: string | null;
+  radius_km: number | null;
 }
 
 export interface SWOT {

@@ -85,7 +85,7 @@ function Stat({
 }
 
 function ReportPage() {
-  const { t } = useI18n();
+  const { t, tRadius } = useI18n();
   const [data, setData] = useState<StoredReport | null>(null);
   const [ready, setReady] = useState(false);
 

@@ -68,7 +68,8 @@ const en: Dict = {
   wealthDesc: "Estimated spending power of local households after essential expenses.",
   infraDesc: "Availability of roads, electricity, and other infrastructure needed to run a business.",
   economyDesc: "Balance between formal (registered) and informal economic activity in this area.",
-  competitorDensityDesc: "Number of similar businesses operating within a 5 km radius, from live map data.",
+  competitorDensityDesc:
+    "Number of similar businesses operating nearby, from live map data (search radius is matched to your business type).",
   govSchemes: "Applicable Government Schemes",
   govSchemesSub: "Central schemes that may support this business, based on your category and project cost.",
   swot: "SWOT Analysis",
@@ -187,7 +188,8 @@ const hi: Dict = {
   wealthDesc: "आवश्यक खर्चों के बाद स्थानीय परिवारों की अनुमानित खर्च क्षमता।",
   infraDesc: "व्यवसाय चलाने के लिए आवश्यक सड़कों, बिजली और अन्य बुनियादी सुविधाओं की उपलब्धता।",
   economyDesc: "इस क्षेत्र में औपचारिक (पंजीकृत) और अनौपचारिक आर्थिक गतिविधि के बीच संतुलन।",
-  competitorDensityDesc: "लाइव मानचित्र डेटा के अनुसार 5 किमी के दायरे में चल रहे समान व्यवसायों की संख्या।",
+  competitorDensityDesc:
+    "लाइव मानचित्र डेटा के अनुसार आसपास चल रहे समान व्यवसायों की संख्या (खोज का दायरा आपके व्यवसाय के प्रकार के अनुसार तय किया गया है)।",
   govSchemes: "लागू सरकारी योजनाएँ",
   govSchemesSub: "केंद्रीय योजनाएँ जो आपकी श्रेणी और परियोजना लागत के आधार पर इस व्यवसाय में मदद कर सकती हैं।",
   swot: "स्वोट विश्लेषण",
@@ -304,7 +306,8 @@ const as: Dict = {
   wealthDesc: "প্ৰয়োজনীয় খৰচৰ পিছত স্থানীয় পৰিয়ালৰ আনুমানিক খৰচ ক্ষমতা।",
   infraDesc: "ব্যৱসায় চলাবলৈ প্ৰয়োজনীয় ৰাস্তা, বিদ্যুৎ আৰু অন্যান্য আন্তঃগাঁথনিৰ উপলব্ধতা।",
   economyDesc: "এই অঞ্চলত আনুষ্ঠানিক (পঞ্জীয়নভুক্ত) আৰু অনানুষ্ঠানিক অৰ্থনৈতিক কাৰ্যকলাপৰ মাজৰ ভাৰসাম্য।",
-  competitorDensityDesc: "লাইভ মেপ ডেটা অনুসৰি ৫ কিমি ব্যাসাৰ্ধত চলি থকা একে ধৰণৰ ব্যৱসায়ৰ সংখ্যা।",
+  competitorDensityDesc:
+    "লাইভ মেপ ডেটা অনুসৰি ওচৰত চলি থকা একে ধৰণৰ ব্যৱসায়ৰ সংখ্যা (সন্ধানৰ ব্যাসাৰ্ধ আপোনাৰ ব্যৱসায়ৰ প্ৰকাৰ অনুসৰি নিৰ্ধাৰণ কৰা হৈছে)।",
   govSchemes: "প্ৰযোজ্য চৰকাৰী আঁচনি",
   govSchemesSub: "কেন্দ্ৰীয় আঁচনি যি আপোনাৰ শ্ৰেণী আৰু প্ৰকল্পৰ খৰচৰ ওপৰত ভিত্তি কৰি এই ব্যৱসায়ক সহায় কৰিব পাৰে।",
   swot: "SWOT বিশ্লেষণ",
@@ -365,8 +368,36 @@ const as: Dict = {
 
 const dicts: Record<Lang, Dict> = { English: en, Hindi: hi, Assamese: as };
 
-type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: (k: string) => string };
-const LangContext = createContext<Ctx>({ lang: "English", setLang: () => {}, t: (k) => en[k] ?? k });
+// Formats a radius like 1.5 or 3 without a trailing ".0".
+function formatRadiusKm(radiusKm: number): string {
+  return Number.isInteger(radiusKm) ? String(radiusKm) : radiusKm.toFixed(1);
+}
+
+// competitorDensityDesc needs a live number (the resolved search radius)
+// interpolated into the sentence, which a flat string dictionary can't do.
+// Kept as its own small per-language map — rather than overloading t()'s
+// signature — so every other static key keeps working exactly as before.
+const competitorRadiusText: Record<Lang, (radiusKm: number) => string> = {
+  English: (km) =>
+    `Number of similar businesses operating within a ${formatRadiusKm(km)} km radius, from live map data.`,
+  Hindi: (km) =>
+    `लाइव मानचित्र डेटा के अनुसार ${formatRadiusKm(km)} किमी के दायरे में चल रहे समान व्यवसायों की संख्या।`,
+  Assamese: (km) =>
+    `লাইভ মেপ ডেটা অনুসৰি ${formatRadiusKm(km)} কিমি ব্যাসাৰ্ধত চলি থকা একে ধৰণৰ ব্যৱসায়ৰ সংখ্যা।`,
+};
+
+type Ctx = {
+  lang: Lang;
+  setLang: (l: Lang) => void;
+  t: (k: string) => string;
+  tRadius: (radiusKm: number) => string;
+};
+const LangContext = createContext<Ctx>({
+  lang: "English",
+  setLang: () => {},
+  t: (k) => en[k] ?? k,
+  tRadius: (km) => competitorRadiusText.English(km),
+});
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("English");
@@ -382,8 +413,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   };
 
   const t = (k: string) => dicts[lang][k] ?? en[k] ?? k;
+  const tRadius = (radiusKm: number) => (competitorRadiusText[lang] ?? competitorRadiusText.English)(radiusKm);
 
-  return <LangContext.Provider value={{ lang, setLang, t }}>{children}</LangContext.Provider>;
+  return <LangContext.Provider value={{ lang, setLang, t, tRadius }}>{children}</LangContext.Provider>;
 }
 
 export function useI18n() {

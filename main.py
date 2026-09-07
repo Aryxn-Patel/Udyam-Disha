@@ -78,12 +78,13 @@ class MarketMetricsResponse(BaseModel):
     economy_type_ratio: float
     live_competitor_count: Optional[int] = None
     competitor_breakdown: Optional[str] = None
+    radius_km: Optional[float] = None
 
     @classmethod
     def from_dataclass(cls, m: MarketMetrics, live_competitor_count: Optional[int] = None,
-                        competitor_breakdown: Optional[str] = None):
+                        competitor_breakdown: Optional[str] = None, radius_km: Optional[float] = None):
         return cls(**m.__dict__, live_competitor_count=live_competitor_count,
-                    competitor_breakdown=competitor_breakdown)
+                    competitor_breakdown=competitor_breakdown, radius_km=radius_km)
 
 
 class SWOTResponse(BaseModel):
@@ -189,6 +190,7 @@ def generate_report(request: GenerateReportRequest):
     # Live competitor check via Google Places — best-effort, never blocks the request
     live_competitor_count: Optional[int] = None
     competitor_breakdown: Optional[str] = None
+    live_radius_km: Optional[float] = None
     try:
         live_data = get_live_competitor_density(
             village_name=market_metrics.village_name,
@@ -201,9 +203,12 @@ def generate_report(request: GenerateReportRequest):
             # silently falling back to the generic "store" type — which is how
             # unrelated results like electronics stores were showing up for Dairy.
             business_type=request.business_category,
+            # radius_km intentionally omitted — get_live_competitor_density
+            # resolves a category-appropriate radius on its own (see market.py).
         )
         live_competitor_count = live_data.competitor_count
         competitor_breakdown = live_data.competitor_breakdown
+        live_radius_km = live_data.radius_km
     except LiveMarketError as e:
         print(f"LIVE COMPETITOR ERROR: {e}")
 
@@ -227,7 +232,7 @@ def generate_report(request: GenerateReportRequest):
 
     market_metrics_response = MarketMetricsResponse.from_dataclass(
         market_metrics, live_competitor_count=live_competitor_count,
-        competitor_breakdown=competitor_breakdown,
+        competitor_breakdown=competitor_breakdown, radius_km=live_radius_km,
     )
 
     business_report_response = None
