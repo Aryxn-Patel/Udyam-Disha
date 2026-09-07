@@ -66,12 +66,20 @@ function InfrastructureBar({ score }: { score: number }) {
   );
 }
 
-function Stat({ label, value, subtext }: { label: string; value: string; subtext?: string | null }) {
+function Stat({
+  label,
+  value,
+  description,
+}: {
+  label: string;
+  value: string;
+  description?: string | null;
+}) {
   return (
     <div className="border border-ud-gold bg-ud-cream p-4">
       <p className="text-sm font-semibold tracking-wide text-ud-ochre uppercase">{label}</p>
       <p className="mt-1 text-2xl font-bold text-ud-brown">{value}</p>
-      {subtext && <p className="mt-1 text-sm text-ud-brown opacity-70">{subtext}</p>}
+      {description && <p className="mt-1 text-xs text-ud-brown opacity-60">{description}</p>}
     </div>
   );
 }
@@ -140,10 +148,26 @@ function ReportPage() {
       <section className="mt-6">
         <h2 className="text-lg font-bold text-ud-brown">{t("marketSnapshot")}</h2>
         <div className="mt-3 grid gap-4 sm:grid-cols-3">
-          <Stat label={t("population")} value={formatNum(metrics.total_population, 0)} />
-          <Stat label={t("marketDensity")} value={`${formatNum(metrics.market_density)} / sq km`} />
-          <Stat label={t("saturation")} value={formatNum(metrics.business_saturation_index)} />
-          <Stat label={t("wealth")} value={formatINR(metrics.true_disposable_wealth)} />
+          <Stat
+            label={t("population")}
+            value={formatNum(metrics.total_population, 0)}
+            description={t("populationDesc")}
+          />
+          <Stat
+            label={t("marketDensity")}
+            value={`${formatNum(metrics.market_density)} / sq km`}
+            description={t("marketDensityDesc")}
+          />
+          <Stat
+            label={t("saturation")}
+            value={formatNum(metrics.business_saturation_index)}
+            description={t("saturationDesc")}
+          />
+          <Stat
+            label={t("wealth")}
+            value={formatINR(metrics.true_disposable_wealth)}
+            description={t("wealthDesc")}
+          />
           <div className="border border-ud-gold bg-ud-cream p-4">
             <p className="text-sm font-semibold tracking-wide text-ud-ochre uppercase">
               {t("infra")}
@@ -154,13 +178,18 @@ function ReportPage() {
                 {metrics.infrastructure_readiness_score.toFixed(1)} / 5
               </p>
             </div>
+            <p className="mt-1 text-xs text-ud-brown opacity-60">{t("infraDesc")}</p>
           </div>
-          <Stat label={t("economy")} value={formatNum(metrics.economy_type_ratio, 3)} />
+          <Stat
+            label={t("economy")}
+            value={formatNum(metrics.economy_type_ratio, 3)}
+            description={t("economyDesc")}
+          />
           {metrics.live_competitor_count !== null && metrics.live_competitor_count !== undefined && (
             <Stat
               label={t("competitorDensity")}
               value={`${metrics.live_competitor_count >= 20 ? "20+" : metrics.live_competitor_count} nearby`}
-              subtext={metrics.competitor_breakdown}
+              description={t("competitorDensityDesc")}
             />
           )}
         </div>
