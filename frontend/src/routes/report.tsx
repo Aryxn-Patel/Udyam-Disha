@@ -5,6 +5,7 @@ import { SiteLayout } from "@/components/SiteLayout";
 import { useI18n } from "@/lib/i18n";
 import { loadReport, formatNum, formatINR, type StoredReport } from "@/lib/report-store";
 import type { SWOT } from "@/lib/api";
+import { generateReport } from "@/lib/api"; // Added API import
 
 export const Route = createFileRoute("/report")({
   head: () => ({
@@ -85,14 +86,58 @@ function Stat({
 }
 
 function ReportPage() {
-  const { t, tRadius } = useI18n();
+  const { t } = useI18n();
   const [data, setData] = useState<StoredReport | null>(null);
   const [ready, setReady] = useState(false);
+  
+  // New state for API translation request
+  const [isTranslating, setIsTranslating] = useState(false);
 
   useEffect(() => {
     setData(loadReport());
     setReady(true);
   }, []);
+
+  const handleLanguageChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLang = e.target.value;
+    if (!data) return;
+
+    setIsTranslating(true);
+    try {
+      // Re-build request payload securely from the stored request (or inferred from response)
+      const reqPayload = (data as any).request ? {
+        ...(data as any).request,
+        language: newLang
+      } : {
+        state_name: data.response.market_metrics.state_name,
+        district_name: data.response.market_metrics.district_name,
+        village_name: data.response.market_metrics.village_name,
+        subdistrict_name: data.response.market_metrics.subdistrict_name || undefined,
+        business_category: data.response.business_category,
+        available_capital: data.response.financial_plan.project_cost || 100000, 
+        language: newLang
+      };
+
+      // Call API
+      const newResponse = await generateReport(reqPayload);
+      
+      // Update UI state and localStorage to persist the translation
+      const newData = { ...data, request: reqPayload, response: newResponse };
+      setData(newData);
+      
+      try {
+         localStorage.setItem("udyam_report", JSON.stringify(newData));
+      } catch (err) {
+         console.warn("Could not save to local storage", err);
+      }
+      
+    } catch (err) {
+      console.error("Translation failed:", err);
+      alert("Failed to translate the report. Please check your connection and try again.");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   if (!ready) return <SiteLayout>{null}</SiteLayout>;
 
@@ -129,132 +174,155 @@ function ReportPage() {
   return (
     <SiteLayout>
       <div className="border border-ud-gold bg-ud-sand p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-ud-brown sm:text-3xl">{t("reportTitle")}</h1>
             <p className="mt-1 text-base text-ud-brown capitalize">
               {response.location} · {response.business_category}
             </p>
           </div>
-          <Link
-            to="/"
-            className="no-print shrink-0 rounded-[3px] border-2 border-ud-brown bg-white px-4 py-2 text-sm font-bold text-ud-brown hover:bg-ud-cream"
-          >
-            {t("editDetails")}
-          </Link>
+          
+          {/* Action Buttons: Language Select & Edit Details */}
+          <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+            <select
+              value={response.language || "English"}
+              onChange={handleLanguageChange}
+              disabled={isTranslating}
+              className="no-print rounded-[3px] border-2 border-ud-brown bg-white px-3 py-2 text-sm font-bold text-ud-brown hover:bg-ud-cream disabled:opacity-50 cursor-pointer"
+            >
+              <option value="English">English</option>
+              <option value="Hindi">हिंदी (Hindi)</option>
+              <option value="Assamese">অসমীয়া (Assamese)</option>
+              <option value="Bengali">বাংলা (Bengali)</option>
+            </select>
+            <Link
+              to="/"
+              className="no-print shrink-0 rounded-[3px] border-2 border-ud-brown bg-white px-4 py-2 text-sm font-bold text-ud-brown hover:bg-ud-cream text-center"
+            >
+              {t("editDetails")}
+            </Link>
+          </div>
         </div>
       </div>
 
-      <section className="mt-6">
-        <h2 className="text-lg font-bold text-ud-brown">{t("marketSnapshot")}</h2>
-        <div className="mt-3 grid gap-4 sm:grid-cols-3">
-          <Stat
-            label={t("population")}
-            value={formatNum(metrics.total_population, 0)}
-            description={t("populationDesc")}
-          />
-          <Stat
-            label={t("marketDensity")}
-            value={`${formatNum(metrics.market_density)} / sq km`}
-            description={t("marketDensityDesc")}
-          />
-          <Stat
-            label={t("saturation")}
-            value={formatNum(metrics.business_saturation_index)}
-            description={t("saturationDesc")}
-          />
-          <Stat
-            label={t("wealth")}
-            value={formatINR(metrics.true_disposable_wealth)}
-            description={t("wealthDesc")}
-          />
-          <div className="border border-ud-gold bg-ud-cream p-4">
-            <p className="text-sm font-semibold tracking-wide text-ud-ochre uppercase">
-              {t("infra")}
-            </p>
-            <div className="mt-2">
-              <InfrastructureBar score={metrics.infrastructure_readiness_score} />
-              <p className="text-sm text-ud-brown">
-                {metrics.infrastructure_readiness_score.toFixed(1)} / 5
-              </p>
-            </div>
-            <p className="mt-1 text-xs text-ud-brown opacity-60">{t("infraDesc")}</p>
-          </div>
-          <Stat
-            label={t("economy")}
-            value={formatNum(metrics.economy_type_ratio, 3)}
-            description={t("economyDesc")}
-          />
-          {metrics.live_competitor_count !== null && metrics.live_competitor_count !== undefined && (
-            <Stat
-              label={t("competitorDensity")}
-              value={`${metrics.live_competitor_count >= 20 ? "20+" : metrics.live_competitor_count} nearby`}
-              description={t("competitorDensityDesc")}
-            />
-          )}
+      {isTranslating && (
+        <div className="mt-6 border-2 border-ud-ochre bg-ud-ochre/10 p-4 text-center font-bold text-ud-brown animate-pulse rounded-[3px]">
+          Translating report... Please wait.
         </div>
-      </section>
-
-      {!isReportMissing && response.business_report!.recommended_schemes.length > 0 && (
-        <section className="mt-6">
-          <h2 className="text-lg font-bold text-ud-brown">{t("govSchemes")}</h2>
-          <p className="mt-1 text-sm text-ud-brown opacity-80">{t("govSchemesSub")}</p>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            {response.business_report!.recommended_schemes.map((scheme, i) => (
-              <div key={i} className="border-l-4 border-green-600 bg-ud-cream p-4">
-                <p className="font-bold text-ud-brown">{scheme.scheme_name}</p>
-                <p className="mt-1 text-sm text-ud-brown">{scheme.subsidy_benefit}</p>
-                <p className="mt-1 text-xs italic text-ud-brown opacity-70">{scheme.eligibility_fit}</p>
-              </div>
-            ))}
-          </div>
-        </section>
       )}
 
-      {isReportMissing ? (
-        <section className="mt-6 border border-ud-gold bg-ud-cream p-5">
-          <p className="text-base text-ud-brown">{t("advisoryUnavailable")}</p>
+      <div className={isTranslating ? "opacity-40 pointer-events-none transition-opacity" : "transition-opacity"}>
+        <section className="mt-6">
+          <h2 className="text-lg font-bold text-ud-brown">{t("marketSnapshot")}</h2>
+          <div className="mt-3 grid gap-4 sm:grid-cols-3">
+            <Stat
+              label={t("population")}
+              value={formatNum(metrics.total_population, 0)}
+              description={t("populationDesc")}
+            />
+            <Stat
+              label={t("marketDensity")}
+              value={`${formatNum(metrics.market_density)} / sq km`}
+              description={t("marketDensityDesc")}
+            />
+            <Stat
+              label={t("saturation")}
+              value={formatNum(metrics.business_saturation_index)}
+              description={t("saturationDesc")}
+            />
+            <Stat
+              label={t("wealth")}
+              value={formatINR(metrics.true_disposable_wealth)}
+              description={t("wealthDesc")}
+            />
+            <div className="border border-ud-gold bg-ud-cream p-4">
+              <p className="text-sm font-semibold tracking-wide text-ud-ochre uppercase">
+                {t("infra")}
+              </p>
+              <div className="mt-2">
+                <InfrastructureBar score={metrics.infrastructure_readiness_score} />
+                <p className="text-sm text-ud-brown">
+                  {metrics.infrastructure_readiness_score.toFixed(1)} / 5
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-ud-brown opacity-60">{t("infraDesc")}</p>
+            </div>
+            <Stat
+              label={t("economy")}
+              value={formatNum(metrics.economy_type_ratio, 3)}
+              description={t("economyDesc")}
+            />
+            {metrics.live_competitor_count !== null && metrics.live_competitor_count !== undefined && (
+              <Stat
+                label={t("competitorDensity")}
+                value={`${metrics.live_competitor_count >= 20 ? "20+" : metrics.live_competitor_count} nearby`}
+                description={t("competitorDensityDesc")}
+              />
+            )}
+          </div>
         </section>
-      ) : (
-        <>
+
+        {!isReportMissing && response.business_report!.recommended_schemes.length > 0 && (
           <section className="mt-6">
-            <h2 className="text-lg font-bold text-ud-brown">{t("swot")}</h2>
+            <h2 className="text-lg font-bold text-ud-brown">{t("govSchemes")}</h2>
+            <p className="mt-1 text-sm text-ud-brown opacity-80">{t("govSchemesSub")}</p>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              {swotBlocks.map(([label, items]) => (
-                <div key={label} className="border border-ud-gold">
-                  <div className="bg-ud-ochre px-4 py-2 font-bold text-ud-cream">{label}</div>
-                  <div className="bg-ud-cream p-4">
-                    {items.length > 0 ? (
-                      <ul className="list-inside list-disc space-y-1 text-sm text-ud-brown">
-                        {items.map((point, i) => (
-                          <li key={i}>{point}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm italic text-ud-brown opacity-70">No data available</p>
-                    )}
-                  </div>
+              {response.business_report!.recommended_schemes.map((scheme, i) => (
+                <div key={i} className="border-l-4 border-green-600 bg-ud-cream p-4">
+                  <p className="font-bold text-ud-brown">{scheme.scheme_name}</p>
+                  <p className="mt-1 text-sm text-ud-brown">{scheme.subsidy_benefit}</p>
+                  <p className="mt-1 text-xs italic text-ud-brown opacity-70">{scheme.eligibility_fit}</p>
                 </div>
               ))}
             </div>
           </section>
+        )}
 
-          <section className="mt-6">
-            <h2 className="text-lg font-bold text-ud-brown">{t("pricing")}</h2>
-            <div className="mt-3 flex items-center justify-between border-l-4 border-ud-ochre bg-ud-cream p-5">
-              <div>
-                <p className="text-sm text-ud-brown">{response.business_report?.pricing_suggestion}</p>
-                <p className="mt-2 text-xs font-bold tracking-wide text-ud-ochre uppercase">
-                  {t("valueEstimate")}
-                </p>
-              </div>
-              <div className="ml-6 whitespace-nowrap text-2xl font-bold text-ud-brown">
-                {response.business_report?.pricing_value_estimate}
-              </div>
-            </div>
+        {isReportMissing ? (
+          <section className="mt-6 border border-ud-gold bg-ud-cream p-5">
+            <p className="text-base text-ud-brown">{t("advisoryUnavailable")}</p>
           </section>
-        </>
-      )}
+        ) : (
+          <>
+            <section className="mt-6">
+              <h2 className="text-lg font-bold text-ud-brown">{t("swot")}</h2>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                {swotBlocks.map(([label, items]) => (
+                  <div key={label} className="border border-ud-gold">
+                    <div className="bg-ud-ochre px-4 py-2 font-bold text-ud-cream">{label}</div>
+                    <div className="bg-ud-cream p-4">
+                      {items.length > 0 ? (
+                        <ul className="list-inside list-disc space-y-1 text-sm text-ud-brown">
+                          {items.map((point, i) => (
+                            <li key={i}>{point}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm italic text-ud-brown opacity-70">No data available</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="mt-6">
+              <h2 className="text-lg font-bold text-ud-brown">{t("pricing")}</h2>
+              <div className="mt-3 flex items-center justify-between border-l-4 border-ud-ochre bg-ud-cream p-5">
+                <div>
+                  <p className="text-sm text-ud-brown">{response.business_report?.pricing_suggestion}</p>
+                  <p className="mt-2 text-xs font-bold tracking-wide text-ud-ochre uppercase">
+                    {t("valueEstimate")}
+                  </p>
+                </div>
+                <div className="ml-6 whitespace-nowrap text-2xl font-bold text-ud-brown">
+                  {response.business_report?.pricing_value_estimate}
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+      </div>
 
       <div className="no-print mt-6">
         <Link
