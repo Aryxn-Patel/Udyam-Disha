@@ -86,8 +86,8 @@ function Stat({
 }
 
 function ReportPage() {
-  // Yahan hum i18n se current language nikal rahe hain
-  const { t, language } = useI18n(); 
+  // CORRECTED: i18n se explicitly 'lang' extract kar rahe hain
+  const { t, lang } = useI18n(); 
   const [data, setData] = useState<StoredReport | null>(null);
   const [ready, setReady] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -98,34 +98,39 @@ function ReportPage() {
     setReady(true);
   }, []);
 
-  // Yeh useEffect tab trigger hoga jab Navbar se language change hogi
+  // GLOBAL LANGUAGE SYNC EFFECT
   useEffect(() => {
-    if (!data || !language || !ready) return;
+    // Agar report ready nahi hai, ya translate chal raha hai, toh return kar jao
+    if (!data || !lang || !ready || isTranslating) return;
 
-    // Check karte hain agar requested language current report ki language se alag hai
+    // Report jis language mein save hui thi, wo check karo
     const currentReportLang = data.response.language || "English";
     
-    if (language.toLowerCase() !== currentReportLang.toLowerCase() && !isTranslating) {
+    // Agar Global Language aur Report ki Language match nahi kar rahi, toh API call karo
+    if (lang.toLowerCase() !== currentReportLang.toLowerCase()) {
       const fetchNewTranslation = async () => {
         setIsTranslating(true);
         try {
           const reqPayload = (data as any).request ? {
             ...(data as any).request,
-            language: language
+            language: lang // Nayi language bhej rahe hain
           } : {
             state_name: data.response.market_metrics.state_name,
             district_name: data.response.market_metrics.district_name,
             village_name: data.response.market_metrics.village_name,
             subdistrict_name: data.response.market_metrics.subdistrict_name || undefined,
             business_category: data.response.business_category,
-            available_capital: data.response.financial_plan.project_cost || 100000, 
-            language: language
+            available_capital: data.response.financial_plan?.project_cost || 100000, 
+            language: lang
           };
 
           const newResponse = await generateReport(reqPayload);
           const newData = { ...data, request: reqPayload, response: newResponse };
           
+          // Naya translated data UI mein set karo
           setData(newData);
+          
+          // LocalStorage mein update karo taaki reload pe wapas purani bhasha na aaye
           try {
              localStorage.setItem("udyam_report", JSON.stringify(newData));
           } catch (err) {
@@ -140,7 +145,7 @@ function ReportPage() {
 
       fetchNewTranslation();
     }
-  }, [language, data, ready]); // Dependency array mein 'language' hai
+  }, [lang, data, ready, isTranslating]); 
 
   if (!ready) return <SiteLayout>{null}</SiteLayout>;
 
@@ -185,6 +190,7 @@ function ReportPage() {
             </p>
           </div>
           
+          {/* Alag se dropdown hata diya gaya hai, global navbar wala hi kaam karega */}
           <Link
             to="/"
             className="no-print shrink-0 rounded-[3px] border-2 border-ud-brown bg-white px-4 py-2 text-sm font-bold text-ud-brown hover:bg-ud-cream text-center"
@@ -196,11 +202,13 @@ function ReportPage() {
 
       {isTranslating && (
         <div className="mt-6 border-2 border-ud-ochre bg-ud-ochre/10 p-4 text-center font-bold text-ud-brown animate-pulse rounded-[3px]">
-          Translating report... Please wait.
+          {lang === "Hindi" ? "रिपोर्ट का अनुवाद किया जा रहा है... कृपया प्रतीक्षा करें।" : 
+           lang === "Assamese" ? "প্ৰতিবেদন অনুবাদ হৈ আছে... অনুগ্ৰহ কৰি অপেক্ষা কৰক।" : 
+           "Translating report... Please wait."}
         </div>
       )}
 
-      <div className={isTranslating ? "opacity-40 pointer-events-none transition-opacity" : "transition-opacity"}>
+      <div className={isTranslating ? "opacity-40 pointer-events-none transition-opacity duration-300" : "transition-opacity duration-300"}>
         <section className="mt-6">
           <h2 className="text-lg font-bold text-ud-brown">{t("marketSnapshot")}</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-3">
