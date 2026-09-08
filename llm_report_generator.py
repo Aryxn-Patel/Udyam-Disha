@@ -37,16 +37,6 @@ class LLMReportError(Exception):
     pass
 
 
-# ---------------------------------------------------------------------------
-# Language normalization.
-#
-# Frontends often send inconsistent values ("hi", "hindi", "Hindi", "HINDI",
-# "हिंदी") for the same language. If the raw value doesn't match what the
-# LLM expects, the prompt silently falls back to whatever string was passed,
-# and a typo/mismatch can make the model default to English without any
-# error being raised. This normalizes common variants to a clean display
-# name and logs the raw incoming value so mismatches are visible.
-# ---------------------------------------------------------------------------
 LANGUAGE_ALIASES = {
     "hindi": "Hindi", "hi": "Hindi", "हिंदी": "Hindi", "हिन्दी": "Hindi",
     "english": "English", "en": "English",
@@ -70,20 +60,6 @@ def normalize_language(raw_language: str) -> str:
     return normalized
 
 
-# ---------------------------------------------------------------------------
-# Fallback scheme-name translations.
-#
-# LLMs are inconsistent about translating official government scheme names —
-# they often treat acronyms like "PMEGP" or "MUDRA" as untranslatable proper
-# nouns even when explicitly instructed to write everything in the target
-# language. Rather than relying on the model to comply every time, we
-# normalize known scheme names after the fact using this lookup table.
-#
-# Add more entries here as you see new scheme names showing up in English.
-# Matching is done as a case-insensitive substring search against whatever
-# the LLM returned, so partial names / extra wording around the acronym
-# still match.
-# ---------------------------------------------------------------------------
 SCHEME_NAME_TRANSLATIONS = {
     "hindi": {
         "PMEGP": "प्रधानमंत्री रोजगार सृजन कार्यक्रम (PMEGP)",
@@ -94,16 +70,10 @@ SCHEME_NAME_TRANSLATIONS = {
         "NABARD": "नाबार्ड ऋण योजना",
         "NATIONAL LIVESTOCK MISSION": "राष्ट्रीय पशुधन मिशन",
     },
-    # Add more languages here as needed, e.g. "assamese": {...}
 }
 
 
 def normalize_scheme_name(name: str, language: str) -> str:
-    """
-    Force known government scheme names into the target language, regardless
-    of what the LLM actually returned. Falls back to the LLM's original text
-    if the language isn't in our table or no known scheme matches.
-    """
     lang_map = SCHEME_NAME_TRANSLATIONS.get(language.strip().lower())
     if not lang_map or not name:
         return name
@@ -115,16 +85,39 @@ def normalize_scheme_name(name: str, language: str) -> str:
 
 
 def build_prompt(location: str, business_category: str, available_capital: float,
-                  market_density: float, business_saturation_index: float,
-                  true_disposable_wealth: float, infrastructure_readiness_score: float,
-                  economy_type_ratio: float, language: str,
-                  live_competitor_count: Optional[int] = None) -> str:
+                 market_density: float, business_saturation_index: float,
+                 true_disposable_wealth: float, infrastructure_readiness_score: float,
+                 economy_type_ratio: float, language: str,
+                 live_competitor_count: Optional[int] = None) -> str:
 
     live_competitor_line = (
         f"- Live Competitor Count (within 5km, Google Maps data): {live_competitor_count}"
         if live_competitor_count is not None
         else "- Live Competitor Count: unavailable (rely on Business Saturation Index instead)"
     )
+
+    if language.lower() == "english":
+        language_rules = """
+CRITICAL LANGUAGE RULE:
+Everything MUST be written in English. Translate any non-English inputs into English.
+Do NOT use Hindi or any regional language for any field.
+        """
+        final_reminder = "FINAL REMINDER (most important): Every single string value in your JSON output must be in English. No Hindi or other languages allowed."
+    else:
+        language_rules = f"""
+CRITICAL LANGUAGE RULE FOR SCHEME NAMES:
+"scheme_name" must be written FULLY in {language} script — including the scheme's
+official meaning, not just the English acronym. Spell out what the acronym stands for
+in {language}, and you may keep the English short-code in brackets after it, but the
+short-code alone is NOT acceptable as the whole field.
+Example for Hindi:
+  WRONG: "scheme_name": "PMEGP"
+  WRONG: "scheme_name": "Prime Minister's Employment Generation Programme (PMEGP)"
+  RIGHT: "scheme_name": "प्रधानमंत्री रोजगार सृजन कार्यक्रम (PMEGP)"
+Apply the same rule to every other field — "subsidy_benefit" and "eligibility_fit" must
+also be natively written in {language}, not transliterated and not left in English.
+        """
+        final_reminder = f"FINAL REMINDER (most important): Every single string value in your JSON output — every SWOT point, every summary, every scheme field — must be written in {language}. If {language} is Hindi, use Devanagari script throughout, not English and not Romanized Hindi. Do not slip into English anywhere in the response."
 
     return f"""
 You are an expert rural business consultant in India. Generate a business feasibility
@@ -160,17 +153,7 @@ best fit for this entrepreneur, based on their business type, location, and avai
 capital. Only suggest schemes that are plausibly real and relevant — do not invent scheme
 names.
 
-CRITICAL LANGUAGE RULE FOR SCHEME NAMES:
-"scheme_name" must be written FULLY in {language} script — including the scheme's
-official meaning, not just the English acronym. Spell out what the acronym stands for
-in {language}, and you may keep the English short-code in brackets after it, but the
-short-code alone is NOT acceptable as the whole field.
-Example for Hindi:
-  WRONG: "scheme_name": "PMEGP"
-  WRONG: "scheme_name": "Prime Minister's Employment Generation Programme (PMEGP)"
-  RIGHT: "scheme_name": "प्रधानमंत्री रोजगार सृजन कार्यक्रम (PMEGP)"
-Apply the same rule to every other field — "subsidy_benefit" and "eligibility_fit" must
-also be natively written in {language}, not transliterated and not left in English.
+{language_rules}
 
 Return ONLY valid JSON, no markdown formatting, no code fences, in exactly this shape:
 {{
@@ -193,17 +176,17 @@ Return ONLY valid JSON, no markdown formatting, no code fences, in exactly this 
 Each list should have 2-3 short items, each under 15 words.
 "recommended_schemes" must contain 2-3 entries.
 
-FINAL REMINDER (most important): Every single string value in your JSON output — every
-SWOT point, every summary, every scheme field — must be written in {language}. If
-{language} is Hindi, use Devanagari script throughout, not English and not Romanized
-Hindi. Do not slip into English anywhere in the response, even for scheme acronyms
-(spell out the meaning in {language}, short-code in brackets is fine). Check your own
-output before finalizing: if any field is in English while {language} is not English,
-rewrite it.
+{final_reminder}
 """
 
 
 def build_system_message(language: str) -> str:
+    if language.lower() == "english":
+        return (
+            "You are an expert business-advisory assistant. You must respond ONLY in English. "
+            "Translate any non-English input context into English before generating the JSON output. "
+            "This applies to every field in your JSON output, including scheme names."
+        )
     return (
         f"You are a multilingual business-advisory assistant. You must respond ONLY in "
         f"{language}, in native script (e.g. Devanagari for Hindi, Assamese script for "
@@ -228,11 +211,9 @@ def parse_llm_response(raw_text: str) -> dict:
         raise LLMReportError(f"Failed to parse LLM output as JSON: {e}\nRaw output: {raw_text}")
 
 
-# Unicode block ranges used to sanity-check that the model actually wrote in
-# the requested script, instead of trusting it blindly.
 NATIVE_SCRIPT_RANGES = {
-    "hindi": (0x0900, 0x097F),      # Devanagari
-    "assamese": (0x0980, 0x09FF),   # Bengali-Assamese
+    "hindi": (0x0900, 0x097F),
+    "assamese": (0x0980, 0x09FF),
 }
 
 
@@ -240,7 +221,7 @@ def response_matches_language(data: dict, language: str) -> bool:
     lang_key = language.strip().lower()
     script_range = NATIVE_SCRIPT_RANGES.get(lang_key)
     if not script_range:
-        return True  # nothing to check for English / unlisted languages
+        return True
 
     sample_parts = []
     sample_parts.extend(data.get("strengths", []))
@@ -249,14 +230,14 @@ def response_matches_language(data: dict, language: str) -> bool:
     sample_text = " ".join(sample_parts)
 
     if not sample_text.strip():
-        return True  # nothing to judge, don't block on it
+        return True
 
     low, high = script_range
     native_chars = sum(1 for ch in sample_text if low <= ord(ch) <= high)
     letter_chars = sum(1 for ch in sample_text if ch.isalpha())
     if letter_chars == 0:
         return True
-    return (native_chars / letter_chars) > 0.3  # at least ~30% native-script letters
+    return (native_chars / letter_chars) > 0.3
 
 
 def generate_business_report(location: str, business_category: str, available_capital: float,
@@ -300,11 +281,19 @@ def generate_business_report(location: str, business_category: str, available_ca
 
     if not response_matches_language(data, language):
         print(f"[llm_report_generator] response failed language check for '{language}', retrying with stronger nudge")
-        retry_nudge = (
-            f"\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED because it was written in English "
-            f"instead of {language}. This time, write EVERY field in {language} native "
-            f"script. Do not use English at all."
-        )
+        
+        if language.lower() == "english":
+            retry_nudge = (
+                "\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED because it contained non-English text. "
+                "This time, write EVERY field strictly in English."
+            )
+        else:
+            retry_nudge = (
+                f"\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED because it was written in English "
+                f"instead of {language}. This time, write EVERY field in {language} native "
+                f"script. Do not use English at all."
+            )
+            
         retried_data = call_groq(retry_nudge)
         if response_matches_language(retried_data, language):
             data = retried_data
@@ -339,7 +328,5 @@ def generate_business_report(location: str, business_category: str, available_ca
 
 
 if __name__ == "__main__":
-    # Quick manual test: python llm_report_generator.py
-    # Confirms normalize_language() handles common variants correctly.
     for test_value in ["Hindi", "hindi", "hi", "HINDI", "", None, "English"]:
         print(test_value, "->", normalize_language(test_value))
