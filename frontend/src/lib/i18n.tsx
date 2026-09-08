@@ -69,7 +69,7 @@ const en: Dict = {
   infraDesc: "Availability of roads, electricity, and other infrastructure needed to run a business.",
   economyDesc: "Balance between formal (registered) and informal economic activity in this area.",
   competitorDensityDesc:
-    "Number of similar businesses operating nearby, from live map data (search radius is matched to your business type).",
+    "Number of similar businesses operating nearby, from live map data ",
   govSchemes: "Applicable Government Schemes",
   govSchemesSub: "Central schemes that may support this business, based on your category and project cost.",
   swot: "SWOT Analysis",
@@ -189,7 +189,7 @@ const hi: Dict = {
   infraDesc: "व्यवसाय चलाने के लिए आवश्यक सड़कों, बिजली और अन्य बुनियादी सुविधाओं की उपलब्धता।",
   economyDesc: "इस क्षेत्र में औपचारिक (पंजीकृत) और अनौपचारिक आर्थिक गतिविधि के बीच संतुलन।",
   competitorDensityDesc:
-    "लाइव मानचित्र डेटा के अनुसार आसपास चल रहे समान व्यवसायों की संख्या (खोज का दायरा आपके व्यवसाय के प्रकार के अनुसार तय किया गया है)।",
+    "लाइव मानचित्र डेटा के अनुसार आसपास चल रहे समान व्यवसायों की संख्या ।",
   govSchemes: "लागू सरकारी योजनाएँ",
   govSchemesSub: "केंद्रीय योजनाएँ जो आपकी श्रेणी और परियोजना लागत के आधार पर इस व्यवसाय में मदद कर सकती हैं।",
   swot: "स्वोट विश्लेषण",
@@ -307,7 +307,7 @@ const as: Dict = {
   infraDesc: "ব্যৱসায় চলাবলৈ প্ৰয়োজনীয় ৰাস্তা, বিদ্যুৎ আৰু অন্যান্য আন্তঃগাঁথনিৰ উপলব্ধতা।",
   economyDesc: "এই অঞ্চলত আনুষ্ঠানিক (পঞ্জীয়নভুক্ত) আৰু অনানুষ্ঠানিক অৰ্থনৈতিক কাৰ্যকলাপৰ মাজৰ ভাৰসাম্য।",
   competitorDensityDesc:
-    "লাইভ মেপ ডেটা অনুসৰি ওচৰত চলি থকা একে ধৰণৰ ব্যৱসায়ৰ সংখ্যা (সন্ধানৰ ব্যাসাৰ্ধ আপোনাৰ ব্যৱসায়ৰ প্ৰকাৰ অনুসৰি নিৰ্ধাৰণ কৰা হৈছে)।",
+    "লাইভ মেপ ডেটা অনুসৰি ওচৰত চলি থকা একে ধৰণৰ ব্যৱসায়ৰ সংখ্যা।",
   govSchemes: "প্ৰযোজ্য চৰকাৰী আঁচনি",
   govSchemesSub: "কেন্দ্ৰীয় আঁচনি যি আপোনাৰ শ্ৰেণী আৰু প্ৰকল্পৰ খৰচৰ ওপৰত ভিত্তি কৰি এই ব্যৱসায়ক সহায় কৰিব পাৰে।",
   swot: "SWOT বিশ্লেষণ",
